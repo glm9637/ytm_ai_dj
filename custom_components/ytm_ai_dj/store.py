@@ -53,6 +53,7 @@ class PartyStore:
             "end_time": None,
             "history": [],
             "active": False,
+            "media_player_id": "",
         }
         self.parties[party_id] = party
         await self.async_save()
@@ -65,7 +66,7 @@ class PartyStore:
             
         party = self.parties[party_id]
         for key, value in updates.items():
-            if key in ["vibe", "start_time", "end_time", "active"]:
+            if key in ["vibe", "start_time", "end_time", "active", "media_player_id"]:
                 party[key] = value
                 
         await self.async_save()

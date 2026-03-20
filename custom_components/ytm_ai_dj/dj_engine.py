@@ -5,15 +5,13 @@ import asyncio
 import datetime
 import json
 import logging
-import re
 from typing import Any
 
 from ytmusicapi import YTMusic
-import google.generativeai as genai
-from google.generativeai import GenerativeModel
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
@@ -58,30 +56,30 @@ class DJEngine:
         store: PartyStore | None = self.hass.data[DOMAIN].get("store")
         services = self.hass.data[DOMAIN]
         
-        # Find the actual services which are stored under entry_id, or globally if we refactored
-        # In our __init__.py we put them under entry.entry_id: hass.data[DOMAIN][entry.entry_id] = {"ytm": ..., "genai": ...}
-        # Let's find the first valid ytmusic instance.
         ytm: YTMusic | None = None
+        gemini_key: str | None = None
+        
         for key, value in services.items():
             if isinstance(value, dict) and "ytm" in value:
                 ytm = value["ytm"]
+                # Assuming you stored the key in __init__.py alongside ytm
+                gemini_key = value.get("gemini_key") 
                 break
                 
-        if not store or not ytm:
+        if not store or not ytm or not gemini_key:
             return
 
         active_parties = [p for p in store.get_parties() if p.get("active")]
         
         for party in active_parties:
             try:
-                await self._process_party(party, store, ytm)
+                await self._process_party(party, store, ytm, gemini_key)
             except Exception as err:
                 _LOGGER.error("Error processing party %s: %s", party.get("name"), err)
 
-    async def _process_party(self, party: dict[str, Any], store: PartyStore, ytm: YTMusic) -> None:
+    async def _process_party(self, party: dict[str, Any], store: PartyStore, ytm: YTMusic, gemini_key: str) -> None:
         """Process an individual active party."""
         party_id = party["id"]
-        vibe = party.get("vibe", "")
         
         # 1. Ensure Playlist Exists
         playlist_id = self._playlist_ids.get(party_id)
@@ -106,7 +104,7 @@ class DJEngine:
             if latest_vid and latest_vid != last_seen:
                 self._last_history_ids[party_id] = latest_vid
                 
-                # Check if this song is already in the party's HA history (to prevent duplicates on startup)
+                # Check if this song is already in the party's HA history
                 song_already_in_party_history = any(
                     latest_song.get("title") == h.get("title") and 
                     (latest_song.get("artists") and latest_song["artists"][0].get("name") == h.get("artist"))
@@ -122,8 +120,6 @@ class DJEngine:
         playlist = await self.hass.async_add_executor_job(ytm.get_playlist, playlist_id)
         tracks = playlist.get("tracks", [])
         
-        # Calculate how many songs in the playlist are NOT in the HA history
-        # (These are the upcoming queued songs)
         history_titles = [h.get("title", "").lower() for h in party.get("history", [])]
         
         queued_count = 0
@@ -134,12 +130,12 @@ class DJEngine:
                 
         if queued_count < 2:
             _LOGGER.info("Queue for party %s is low (%s). Triggering LLM...", party["name"], queued_count)
-            await self._generate_and_add_song(party, playlist_id, ytm, store)
+            await self._generate_and_add_song(party, playlist_id, ytm, store, gemini_key)
             
     async def _generate_and_add_song(
-        self, party: dict[str, Any], playlist_id: str, ytm: YTMusic, store: PartyStore
+        self, party: dict[str, Any], playlist_id: str, ytm: YTMusic, store: PartyStore, gemini_key: str
     ) -> None:
-        """Trigger Gemini to get a recommendation and add to YTM playlist."""
+        """Trigger Gemini via REST API to get a recommendation and add to YTM playlist."""
         
         start_time_str = party.get("start_time")
         end_time_str = party.get("end_time")
@@ -182,59 +178,78 @@ class DJEngine:
             f"Respond strictly in JSON format: {{\"artist\": \"Name\", \"title\": \"Song Title\"}}"
         )
 
-        def call_llm():
-            model = GenerativeModel('gemini-1.5-flash')
-            response = model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(
-                    response_mime_type="application/json",
-                )
-            )
-            return response.text
+        # Build the REST API request
+        session = async_get_clientsession(self.hass)
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_key}"
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"responseMimeType": "application/json"}
+        }
 
         try:
-            response_text = await self.hass.async_add_executor_job(call_llm)
-            data = json.loads(response_text)
-            artist = data.get("artist", "")
-            title = data.get("title", "")
+            async with session.post(url, json=payload) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    _LOGGER.error("Gemini API error: %s", error_text)
+                    return
+                
+                response_data = await response.json()
+                response_text = response_data["candidates"][0]["content"]["parts"][0]["text"]
+                
+            parsed_data = json.loads(response_text)
+            artist = parsed_data.get("artist", "")
+            title = parsed_data.get("title", "")
             _LOGGER.info("LLM Suggested: %s by %s", title, artist)
         except Exception as err:
-            _LOGGER.error("Failed to parse LLM response: %s", err)
+            _LOGGER.error("Failed to query Gemini API or parse response: %s", err)
             return
 
-        def search_and_add():
+        def search_and_add_to_playlist():
             query = f"{title} {artist}"
             results = ytm.search(query, filter="songs", limit=3)
             
-            valid_video_id = None
-            for idx, res in enumerate(results):
+            for res in results:
                 duration_str = res.get("duration", "0:0")
                 parts = duration_str.split(":")
+                seconds = 0
                 if len(parts) == 2:
                     seconds = int(parts[0]) * 60 + int(parts[1])
                 elif len(parts) == 3:
                     seconds = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
-                else:
-                    seconds = 0
-                    
-                if MIN_DURATION_SEC <= seconds <= MAX_DURATION_SEC:
-                    valid_video_id = res.get("videoId")
-                    break
-                    
-            if not valid_video_id and results:
-                # Fallback to the first result if none matched duration filter
-                valid_video_id = results[0].get("videoId")
                 
-            if valid_video_id:
-                # Prevent duplicate queue entries (Epic criteria: "must not duplicate queue entries if a user manually forces the playlist to skip")
-                # We check this by just adding to the playlist and hoping they didn't just add it themselves.
-                ytm.add_playlist_items(playlist_id, [valid_video_id])
-                return True
-            return False
+                if MIN_DURATION_SEC <= seconds <= MAX_DURATION_SEC:
+                    vid = res.get("videoId")
+                    if vid:
+                        ytm.add_playlist_items(playlist_id, [vid])
+                        return vid
+            
+            # Fallback to first result if duration filter fails
+            if results and results[0].get("videoId"):
+                vid = results[0].get("videoId")
+                ytm.add_playlist_items(playlist_id, [vid])
+                return vid
+            return None
 
-        success = await self.hass.async_add_executor_job(search_and_add)
-        if success:
-            _LOGGER.info("Successfully added %s by %s to playlist", title, artist)
+        # Execute search and playlist addition
+        video_id = await self.hass.async_add_executor_job(search_and_add_to_playlist)
+
+        if video_id:
+            # PUSH TO LIVE QUEUE via Home Assistant Media Player
+            target_player = party.get("media_player_id")
+            if target_player:
+                _LOGGER.info("Enqueuing %s to live player: %s", video_id, target_player)
+                await self.hass.services.async_call(
+                    "media_player",
+                    "play_media",
+                    {
+                        "entity_id": target_player,
+                        "media_content_id": video_id,
+                        "media_content_type": "music",
+                        "enqueue": "add",
+                    },
+                )
+            else:
+                _LOGGER.warning("No media player selected for party %s. The song was added to the playlist but might not play automatically.", party.get("name"))
 
     def _ensure_playlist(self, ytm: YTMusic, name: str) -> str | None:
         """Find existing playlist or create a new one."""
@@ -243,7 +258,6 @@ class DJEngine:
             if pl.get("title") == name:
                 return pl.get("playlistId")
                 
-        # Create new
         try:
             return ytm.create_playlist(name, "AI DJ Generated Playlist")
         except Exception as e:

@@ -63,6 +63,7 @@ async def ws_create_party(
         vol.Optional("vibe"): str,
         vol.Optional("start_time"): vol.Any(str, None),
         vol.Optional("end_time"): vol.Any(str, None),
+        vol.Optional("media_player_id"): str,
         vol.Optional("active"): bool,
     }
 )

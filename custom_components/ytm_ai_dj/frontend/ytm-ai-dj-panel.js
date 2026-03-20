@@ -158,11 +158,25 @@ class YtmAiDjPanel extends LitElement {
     `;
   }
 
-  constructor() {
+constructor() {
     super();
     this.parties = [];
     this.selectedPartyId = null;
     this.newPartyName = "";
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    this._pollingInterval = setInterval(() => {
+      this.fetchParties();
+    }, 10000); 
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._pollingInterval) {
+      clearInterval(this._pollingInterval);
+    }
   }
 
   firstUpdated() {
@@ -319,11 +333,29 @@ class YtmAiDjPanel extends LitElement {
       `;
     }
 
+const mediaPlayers = Object.keys(this.hass.states).filter(eid => eid.startsWith('media_player.'));
+
     return html`
       <div class="main">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
           <h2 style="margin: 0">${party.name}</h2>
           <button class="danger" @click=${() => this.deleteParty(party.id)}>Delete Party</button>
+        </div>
+
+        <div class="card">
+          <div class="form-group">
+            <label><strong>Target Speaker</strong></label>
+            <select 
+              style="width: 100%; padding: 10px; margin-top: 8px; border-radius: 4px;"
+              .value=${party.media_player_id || ''}
+              @change=${e => this.updateParty(party.id, { media_player_id: e.target.value })}
+            >
+              <option value="">Select a Speaker</option>
+              ${mediaPlayers.map(eid => html`
+                <option value="${eid}">${this.hass.states[eid].attributes.friendly_name || eid}</option>
+              `)}
+            </select>
+          </div>
         </div>
 
         <div class="card">
@@ -358,7 +390,7 @@ class YtmAiDjPanel extends LitElement {
           </div>
         </div>
 
-        <div class="card" style="display: flex; justify-content: space-between; align-items: center; background: ${party.active ? 'var(--light-primary-color, #e1f5fe)' : 'var(--card-background-color)'}">
+        <div class="card" style="display: flex; justify-content: space-between; align-items: center; background: ${party.active ? 'var(--ha-color-green-20, #0a3a1d)' : 'var(--card-background-color)'}">
           <div>
             <h3 style="margin: 0 0 8px 0;">DJ Status: ${party.active ? 'Active' : 'Stopped'}</h3>
             <p style="margin: 0; color: gray;">When active, the AI DJ monitors your YouTube Music queue.</p>

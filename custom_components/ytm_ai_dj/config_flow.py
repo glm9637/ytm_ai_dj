@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import json
 from typing import Any
 
 import voluptuous as vol
@@ -10,9 +11,9 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from ytmusicapi import YTMusic
-import google.generativeai as genai
 
 from .const import DOMAIN, CONF_GEMINI_API_KEY, CONF_YTM_HEADERS
 
@@ -25,36 +26,47 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     }
 )
 
-
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
-    """Validate the user input allows us to connect.
-
-    Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
-    """
+    """Validate the user input allows us to connect."""
     
-    # 1. Validate Gemini
+    # 1. Validate Gemini via REST API
     gemini_key = data[CONF_GEMINI_API_KEY]
+    session = async_get_clientsession(hass)
+    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={gemini_key}"
+    
     try:
-        def test_gemini():
-            genai.configure(api_key=gemini_key)
-            # Try doing a simple model list to validate the key
-            models = list(genai.list_models())
-            if not models:
-                raise ValueError("No generative models found, key may be invalid")
-        
-        await hass.async_add_executor_job(test_gemini)
+        async with session.get(gemini_url) as response:
+            if response.status != 200:
+                error_data = await response.text()
+                _LOGGER.error("Gemini API rejected key: %s", error_data)
+                raise InvalidGeminiKey
     except Exception as err:
-        _LOGGER.error("Gemini API Key validation failed: %s", err)
+        _LOGGER.error("Gemini Connection failed: %s", err)
         raise InvalidGeminiKey from err
 
     # 2. Validate YTM
-    ytm_headers_str = data[CONF_YTM_HEADERS]
+    ytm_headers_str = data[CONF_YTM_HEADERS].strip()
+    
+    if not ytm_headers_str.startswith("{"):
+        headers_dict = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            "Accept": "*/*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Content-Type": "application/json",
+            "X-Goog-AuthUser": "0",
+            "x-origin": "https://music.youtube.com",
+            "cookie": ytm_headers_str,
+            "Cookie": ytm_headers_str,
+            "authorization": "SAPISIDHASH 1",
+            "Authorization": "SAPISIDHASH 1"
+        }
+        ytm_headers_str = json.dumps(headers_dict)
+        data[CONF_YTM_HEADERS] = ytm_headers_str
+
     try:
         def test_ytm():
-            # YTMusic takes the raw headers string in setup
             ytm = YTMusic(auth=ytm_headers_str)
-            # Try fetching the library or history to confirm it is valid
-            # auth required endpoints will fail if auth is bad
+            # Holt einen Song, um zu prüfen, ob der Auth durchgeht
             ytm.get_library_songs(limit=1)
         
         await hass.async_add_executor_job(test_ytm)
@@ -62,9 +74,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         _LOGGER.error("YTMusic Auth Validation failed: %s", err)
         raise InvalidYTMHeaders from err
 
-    # Return info that you want to store in the config entry.
     return {"title": "AI DJ"}
-
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for AI DJ."""
@@ -96,10 +106,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )
 
-
 class InvalidGeminiKey(HomeAssistantError):
     """Error to indicate there is an invalid Gemini API key."""
-
 
 class InvalidYTMHeaders(HomeAssistantError):
     """Error to indicate there are invalid YouTube Music headers."""

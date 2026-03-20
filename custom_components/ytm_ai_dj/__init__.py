@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from ytmusicapi import YTMusic
-import google.generativeai as genai
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.components import panel_custom
+from homeassistant.components.http import StaticPathConfig
 
 from .const import DOMAIN, CONF_GEMINI_API_KEY, CONF_YTM_HEADERS
 
@@ -27,9 +29,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     try:
         def init_services():
-            genai.configure(api_key=gemini_key)
+            # Only initialize YTMusic here. Gemini is now handled via REST API.
             ytm = YTMusic(auth=ytm_headers)
-            return {"ytm": ytm, "genai": genai}
+            return {"ytm": ytm, "gemini_key": gemini_key}
         
         services = await hass.async_add_executor_job(init_services)
         hass.data[DOMAIN][entry.entry_id] = services
@@ -48,16 +50,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass.data[DOMAIN]["engine"] = engine
             engine.start()
             
-            import os
-            from homeassistant.components import panel_custom
-            
             frontend_path = hass.config.path("custom_components/ytm_ai_dj/frontend")
             if not os.path.exists(frontend_path):
                 os.makedirs(frontend_path, exist_ok=True)
                 
-            hass.http.register_static_path(
-                "/ytm_ai_dj_frontend", frontend_path, False
-            )
+            await hass.http.async_register_static_paths([
+                StaticPathConfig("/ytm_ai_dj_frontend", frontend_path, False)
+            ])
             
             await panel_custom.async_register_panel(
                 hass,
