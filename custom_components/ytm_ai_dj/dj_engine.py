@@ -234,16 +234,18 @@ class DJEngine:
         video_id = await self.hass.async_add_executor_job(search_and_add_to_playlist)
 
         if video_id:
-            # PUSH TO LIVE QUEUE via Home Assistant Media Player
             target_player = party.get("media_player_id")
             if target_player:
-                _LOGGER.info("Enqueuing %s to live player: %s", video_id, target_player)
+                ytm_url = f"https://music.youtube.com/watch?v={video_id}"
+                
+                _LOGGER.info("Enqueuing %s to live player: %s", ytm_url, target_player)
+                
                 await self.hass.services.async_call(
                     "media_player",
                     "play_media",
                     {
                         "entity_id": target_player,
-                        "media_content_id": video_id,
+                        "media_content_id": ytm_url, # Use the URL instead of raw ID
                         "media_content_type": "music",
                         "enqueue": "add",
                     },
