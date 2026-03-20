@@ -1,0 +1,24 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up AI DJ",
+        "description": "Please enter your Gemini API Key and your YouTube Music HTTP Request Headers (from an authenticated browser session) to authenticate the DJ integration.",
+        "data": {
+          "gemini_api_key": "Gemini API Key",
+          "ytm_headers": "YouTube Music HTTP Headers"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication",
+      "invalid_gemini_key": "Invalid Gemini API Key: validation failed.",
+      "invalid_ytm_headers": "Invalid YouTube Music headers: could not parse or login failed.",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "Device is already configured"
+    }
+  }
+}
