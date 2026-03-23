@@ -16,7 +16,7 @@ def async_setup_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_delete_party)
     websocket_api.async_register_command(hass, ws_remove_history)
     websocket_api.async_register_command(hass, ws_clear_history)
-
+    websocket_api.async_register_command(hass, websocket_get_players)
 
 @websocket_api.websocket_command(
     {
@@ -143,21 +143,24 @@ async def ws_clear_history(
     except Exception as err:
         connection.send_error(msg["id"], "clear_failed", str(err))
 
+@websocket_api.websocket_command({
+    vol.Required("type"): "ytm_ai_dj/players/get",
+})
 @callback
-@websocket_api.async_response # WICHTIG für async/await
-async def websocket_get_players(hass, connection, msg):
+def websocket_get_players(hass, connection, msg):
     """Gibt nur Music Assistant Player zurück."""
     players = []
-    states = hass.states.async_all("media_player")
+    entity_ids = hass.states.async_entity_ids("media_player")
     
-    for state in states:
-        if state.entity_id.startswith("media_player.mass_"):
-            friendly_name = state.attributes.get("friendly_name", state.entity_id)
-            clean_name = friendly_name.replace(" (Music Assistant)", "")
-            
-            players.append({
-                "entity_id": state.entity_id,
-                "name": clean_name
-            })
-            
+    for entity_id in entity_ids:
+        if entity_id.startswith("media_player.mass_"):
+            state = hass.states.get(entity_id)
+            if state:
+                friendly_name = state.attributes.get("friendly_name", entity_id)
+                clean_name = friendly_name.replace(" (Music Assistant)", "")
+                
+                players.append({
+                    "entity_id": entity_id,
+                    "name": clean_name
+                })
     connection.send_result(msg["id"], players)
