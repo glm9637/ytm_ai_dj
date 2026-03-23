@@ -147,6 +147,7 @@ async def ws_clear_history(
     vol.Required("type"): "ytm_ai_dj/players/get",
 })
 @websocket_api.async_response
+@callback
 async def websocket_get_players(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
