@@ -238,29 +238,38 @@ class DJEngine:
             return None
 
         # Execute search and playlist addition
+        # Execute search and playlist addition
         video_id = await self.hass.async_add_executor_job(search_and_add_to_playlist)
 
         if video_id:
             target_player = party.get("media_player_id")
             if target_player:
-                ytm_url = f"ytmusic://track/{video_id}"
+                # The standard YTM URL that Music Assistant knows how to parse
+                ytm_url = f"https://music.youtube.com/watch?v={video_id}"
                 
-                _LOGGER.info("Enqueuing %s to live player: %s", ytm_url, target_player)
+                # SCREAM INTO THE LOGS SO WE CAN SEE IT
+                _LOGGER.error(">>> AI DJ ACTION: Ready to enqueue %s to %s", ytm_url, target_player)
                 
-                await self.hass.services.async_call(
-                    domain="music_assistant",
-                    service="play_media",
-                    service_data={
-                        "media_id": f"https://music.youtube.com/watch?v={video_id}",
-                        "media_type": "track",
-                        "enqueue": "add",
-                    },
-                    target={
-                        "entity_id": target_player
-                    }
-                )
+                try:
+                    # Use the standard media_player domain. Music Assistant intercepts this automatically.
+                    await self.hass.services.async_call(
+                        domain="media_player",
+                        service="play_media",
+                        service_data={
+                            "media_content_id": ytm_url,
+                            "media_content_type": "track",
+                            "enqueue": "add",
+                        },
+                        target={
+                            "entity_id": target_player
+                        }
+                    )
+                    _LOGGER.error(">>> AI DJ ACTION: Successfully sent command to Music Assistant!")
+                except Exception as e:
+                    # If Home Assistant rejects the command, it prints here
+                    _LOGGER.error(">>> AI DJ ACTION CRASHED: %s", e)
             else:
-                _LOGGER.warning("No media player selected for party %s. The song was added to the playlist but might not play automatically.", party.get("name"))
+                _LOGGER.error(">>> AI DJ WARNING: No media player selected for party %s", party.get("name"))
 
     def _ensure_playlist(self, ytm: YTMusic, name: str) -> str | None:
         """Find existing playlist or create a new one."""
