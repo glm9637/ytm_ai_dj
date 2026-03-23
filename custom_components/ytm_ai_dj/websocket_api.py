@@ -142,3 +142,24 @@ async def ws_clear_history(
         connection.send_result(msg["id"], party)
     except Exception as err:
         connection.send_error(msg["id"], "clear_failed", str(err))
+
+@callback
+def websocket_get_players(hass, connection, msg):
+    """Liefert nur Music Assistant Player mit bereinigten Namen."""
+    players = []
+    all_entities = hass.states.async_all()
+    
+    for state in all_entities:
+        eid = state.entity_id
+        # Wir filtern nur auf MASS-Player
+        if eid.startsWith("media_player.mass_"):
+            friendly_name = state.attributes.get("friendly_name", eid)
+            # Entferne den nervigen Suffix für die UI
+            clean_name = friendly_name.replace(" (Music Assistant)", "")
+            
+            players.append({
+                "entity_id": eid,
+                "name": clean_name
+            })
+            
+    connection.send_result(msg["id"], players)

@@ -241,13 +241,13 @@ class DJEngine:
                 _LOGGER.info("Enqueuing %s to live player: %s", ytm_url, target_player)
                 
                 await self.hass.services.async_call(
-                    "media_player",
+                    "mass",
                     "play_media",
                     {
-                        "entity_id": target_player,
-                        "media_content_id": ytm_url, # Use the URL instead of raw ID
-                        "media_content_type": "music",
-                        "enqueue": "add",
+                        "target": {"entity_id": target_player}, 
+                        "media_id": f"https://music.youtube.com/watch?v={video_id}",
+                        "media_type": "track",
+                        "enqueue": "add", 
                     },
                 )
             else:

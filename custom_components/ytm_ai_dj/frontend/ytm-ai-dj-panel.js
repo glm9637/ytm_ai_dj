@@ -10,7 +10,8 @@ class YtmAiDjPanel extends LitElement {
       parties: { type: Array },
       selectedPartyId: { type: String },
       newPartyName: { type: String },
-      sidebarOpen: { type: Boolean }
+      sidebarOpen: { type: Boolean },
+      massPlayers: { type: Array }
     };
   }
 
@@ -231,6 +232,7 @@ constructor() {
 
   firstUpdated() {
     this.fetchParties();
+    this.fetchMassPlayers();
   }
 
   async fetchParties() {
@@ -243,6 +245,13 @@ constructor() {
     } catch (err) {
       console.error("Failed to fetch parties:", err);
     }
+  }
+
+  async fetchMassPlayers() {
+    const players = await this.hass.callWS({
+      type: "ytm_ai_dj/players/get"
+    });
+    this.massPlayers = players || [];
   }
 
   async createParty() {
@@ -388,8 +397,6 @@ constructor() {
       `;
     }
 
-    const mediaPlayers = this.hass ? Object.keys(this.hass.states).filter(eid => eid.startsWith('media_player.')) : [];
-
     return html`
       <div class="main">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
@@ -408,8 +415,8 @@ constructor() {
               @change=${e => this.updateParty(party.id, { media_player_id: e.target.value })}
             >
               <option value="" ?selected=${!party.media_player_id}>Select a Speaker</option>
-              ${mediaPlayers.map(eid => html`
-                <option value="${eid}" ?selected=${party.media_player_id === eid}>${this.hass.states[eid].attributes.friendly_name || eid}</option>
+              ${this.massPlayers.map(player => html`
+                <option value="${player.entity_id}" ?selected=${party.media_player_id === player.entity_id}>${player.name}</option>
               `)}
             </select>
           </div>
