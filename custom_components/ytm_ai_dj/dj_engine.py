@@ -93,28 +93,35 @@ class DJEngine:
                 _LOGGER.error("Failed to create or find playlist for party %s", party["name"])
                 return
 
-        # 2. Sync History
-        history = await self.hass.async_add_executor_job(ytm.get_history)
-        if history and isinstance(history, list) and len(history) > 0:
-            latest_song = history[0]
-            latest_vid = latest_song.get("videoId")
+       # 2. Sync History (Lokale Abfrage über Music Assistant)
+        target_player = party.get("media_player_id")
+        if target_player:
+            state = self.hass.states.get(target_player)
             
-            # If this is a new song we haven't seen during this party's active session
-            last_seen = self._last_history_ids.get(party_id)
-            if latest_vid and latest_vid != last_seen:
-                self._last_history_ids[party_id] = latest_vid
+            # Prüfen, ob der Player gerade läuft und Medieninformationen hat
+            if state and state.state in ["playing", "paused"]:
+                current_title = state.attributes.get("media_title")
+                current_artist = state.attributes.get("media_artist")
                 
-                # Check if this song is already in the party's HA history
-                song_already_in_party_history = any(
-                    latest_song.get("title") == h.get("title") and 
-                    (latest_song.get("artists") and latest_song["artists"][0].get("name") == h.get("artist"))
-                    for h in party.get("history", [])
-                )
-                
-                if not song_already_in_party_history:
-                    artist_name = latest_song["artists"][0]["name"] if latest_song.get("artists") else "Unknown Artist"
-                    await store.add_to_history(party_id, artist_name, latest_song.get("title", "Unknown Title"))
-                    _LOGGER.info("Added manually played or skipped song to history: %s", latest_song.get("title"))
+                if current_title and current_artist:
+                    # Wir nutzen Artist + Title als eindeutige ID, da wir keine YouTube Video-ID vom lokalen State bekommen
+                    current_song_id = f"{current_artist} - {current_title}"
+                    last_seen = self._last_history_ids.get(party_id)
+                    
+                    # Wenn sich das Lied geändert hat
+                    if current_song_id != last_seen:
+                        self._last_history_ids[party_id] = current_song_id
+                        
+                        # Sicherstellen, dass wir es nicht doppelt in die UI eintragen
+                        song_already_in_party_history = any(
+                            current_title.lower() == h.get("title", "").lower() and 
+                            current_artist.lower() == h.get("artist", "").lower()
+                            for h in party.get("history", [])
+                        )
+                        
+                        if not song_already_in_party_history:
+                            await store.add_to_history(party_id, current_artist, current_title)
+                            _LOGGER.info("Synced local player to history: %s by %s", current_title, current_artist)
 
         # 3. Check Queue Size
         playlist = await self.hass.async_add_executor_job(ytm.get_playlist, playlist_id)
@@ -241,14 +248,16 @@ class DJEngine:
                 _LOGGER.info("Enqueuing %s to live player: %s", ytm_url, target_player)
                 
                 await self.hass.services.async_call(
-                    "music_assistant",
-                    "play_media",
-                    {
-                        "target": {"entity_id": target_player}, 
+                    domain="music_assistant",
+                    service="play_media",
+                    service_data={
                         "media_id": f"https://music.youtube.com/watch?v={video_id}",
                         "media_type": "track",
-                        "enqueue": "add", 
+                        "enqueue": "add",
                     },
+                    target={
+                        "entity_id": target_player
+                    }
                 )
             else:
                 _LOGGER.warning("No media player selected for party %s. The song was added to the playlist but might not play automatically.", party.get("name"))
