@@ -1,4 +1,5 @@
-import { LitElement, html, css } from "https://unpkg.com/lit@3.1.2/index.js?module";
+const LitElement = Object.getPrototypeOf(customElements.get("ha-panel-config"));
+const { html, css } = LitElement;
 
 class YtmAiDjPanel extends LitElement {
   static get properties() {
@@ -204,6 +205,7 @@ class YtmAiDjPanel extends LitElement {
 constructor() {
     super();
     this.parties = [];
+    this.massPlayers = [];
     this.selectedPartyId = null;
     this.newPartyName = "";
     this.sidebarOpen = window.innerWidth > 768;
