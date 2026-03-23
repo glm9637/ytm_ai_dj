@@ -253,10 +253,15 @@ constructor() {
   }
 
   async fetchMassPlayers() {
-    const players = await this.hass.callWS({
-      type: "ytm_ai_dj/players/get"
-    });
-    this.massPlayers = players || [];
+    if (!this.hass) return;
+    try {
+      const players = await this.hass.callWS({
+        type: "ytm_ai_dj/players/get"
+      });
+      this.massPlayers = players || [];
+    } catch (err) {
+      console.error("Failed to fetch mass players:", err);
+    }
   }
 
   async createParty() {
