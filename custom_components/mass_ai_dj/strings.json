@@ -3,21 +3,32 @@
   "config": {
     "step": {
       "user": {
-        "title": "Set up AI DJ",
-        "description": "Please enter your Gemini API Key to authenticate the DJ integration.",
+        "title": "Select AI Provider",
+        "description": "Choose which AI engine will power your DJ.",
         "data": {
-          "gemini_api_key": "Gemini API Key"
+          "provider": "AI Provider"
+        }
+      },
+      "gemini": {
+        "title": "Gemini Configuration",
+        "data": {
+          "gemini_api_key": "Google Gemini API Key"
+        }
+      },
+      "ollama": {
+        "title": "Ollama Configuration",
+        "description": "Ensure your local Ollama server is running and accessible.",
+        "data": {
+          "ollama_url": "Ollama API URL",
+          "ollama_model": "Model Name (e.g., llama3, mistral)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect",
-      "invalid_auth": "Invalid authentication",
-      "invalid_gemini_key": "Invalid Gemini API Key: validation failed.",
-      "unknown": "Unexpected error"
-    },
-    "abort": {
-      "already_configured": "Device is already configured"
+      "cannot_connect": "Failed to connect to the provider.",
+      "invalid_auth": "Invalid API Key.",
+      "invalid_model": "Model not found on your Ollama server. Did you pull it?",
+      "unknown": "Unexpected error occurred."
     }
   }
 }

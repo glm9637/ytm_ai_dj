@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "minor_version": 5,
+  "key": "core.config_entries",
+  "data": {
+    "entries": [
+      {"created_at":"2026-03-24T20:13:34.471411+00:00","data":{},"disabled_by":null,"discovery_keys":{},"domain":"sun","entry_id":"01KMGQPBW715SPPMXH6T8S8GK6","minor_version":1,"modified_at":"2026-03-24T20:13:34.471416+00:00","options":{},"pref_disable_new_entities":false,"pref_disable_polling":false,"source":"import","subentries":[],"title":"Sun","unique_id":null,"version":1},
+      {"created_at":"2026-03-24T20:13:35.798499+00:00","data":{},"disabled_by":null,"discovery_keys":{},"domain":"backup","entry_id":"01KMGQPD5P36C1ZJZ8Q04K4SGJ","minor_version":1,"modified_at":"2026-03-24T20:13:35.798500+00:00","options":{},"pref_disable_new_entities":false,"pref_disable_polling":false,"source":"system","subentries":[],"title":"Backup","unique_id":null,"version":1}
+    ]
+  }
+}

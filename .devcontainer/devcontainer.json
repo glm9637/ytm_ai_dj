@@ -1,0 +1,26 @@
+{
+    "name": "MASS AI DJ Dev",
+    "image": "mcr.microsoft.com/devcontainers/python:3.13",
+    "runArgs": [
+        "--network=host"
+    ],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "ms-python.black-formatter",
+                "keesschollaart.vscode-home-assistant"
+            ],
+            "settings": {
+                "python.formatting.provider": "none",
+                "editor.formatOnSave": true,
+                "python.analysis.extraPaths": [
+                    "${containerWorkspaceFolder}/custom_components/mass_ai_dj"
+                ]
+            }
+        }
+    },
+    "postCreateCommand": "bash .devcontainer/setup.sh",
+    "postStartCommand": "hass -c ./config"
+}
