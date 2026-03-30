@@ -6,6 +6,7 @@ class Song:
     """Class for keeping track of an song."""
     title: str
     artist: str
+    played_at: str | None = None
 
 @dataclass
 class VibeSession:
