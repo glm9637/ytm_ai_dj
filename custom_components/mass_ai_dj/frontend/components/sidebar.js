@@ -15,6 +15,8 @@ export class MassAiDjSidebar extends LitElement {
       _parties: { type: Array },
       _selectedPartyId: { type: String },
       _newPartyName: { type: String },
+      hass: { type: Object },
+      narrow: { type: Boolean },
     };
   }
 
@@ -73,8 +75,9 @@ export class MassAiDjSidebar extends LitElement {
   render() {
     return html`
       <div class="sidebar-container">
-        <div class="header">
-          <h2>AI DJ Parties</h2>
+        <div class="header" style="display: flex; align-items: center;">
+          <ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
+          <h2 style="margin: 0; margin-left: 8px;">AI DJ Parties</h2>
         </div>
 
         <div class="create-section">

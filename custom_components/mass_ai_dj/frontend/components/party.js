@@ -283,6 +283,26 @@ export class MassAiDjParty extends LitElement {
         padding-top: 20px;
         border-top: 1px dashed var(--error-color);
       }
+      .form-group {
+        margin-bottom: 24px;
+      }
+      .timeline {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .action-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 24px;
+        padding-top: 16px;
+        border-top: 1px solid var(--divider-color, #e0e0e0);
+      }
+      .save-group {
+        display: flex;
+        gap: 8px;
+      }
       select {
         width: 100%;
         padding: 8px;

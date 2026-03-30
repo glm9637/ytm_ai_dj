@@ -101,6 +101,7 @@ class MassAiDjPanel extends LitElement {
 
   firstUpdated() {
     this.service.fetchParties();
+    this.service.fetchMediaPlayers();
   }
 
   render() {
@@ -114,16 +115,19 @@ class MassAiDjPanel extends LitElement {
     return html`
       <div class="app-container">
         ${showSidebar
-          ? html`<mass-ai-dj-sidebar .service=${this.service}></mass-ai-dj-sidebar>`
+          ? html`<mass-ai-dj-sidebar .service=${this.service} .hass=${this.hass} .narrow=${this.narrow}></mass-ai-dj-sidebar>`
           : ""}
 
         ${showContent
           ? html`
               <main class="content">
                 ${this.narrow && this._selectedParty
-                  ? html`<button class="btn text" style="margin-bottom: 16px; display: flex; align-items: center;" @click=${() => this.service.selectParty(null)}>
-                      <ha-icon icon="mdi:arrow-left" style="margin-right: 8px;"></ha-icon> Back to Parties
-                    </button>`
+                  ? html`<div style="display: flex; align-items: center; margin-bottom: 16px;">
+                      <ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
+                      <button class="btn text" style="display: flex; align-items: center;" @click=${() => this.service.selectParty(null)}>
+                        <ha-icon icon="mdi:arrow-left" style="margin-right: 8px;"></ha-icon> Back to Parties
+                      </button>
+                    </div>`
                   : ""}
                 ${this._selectedParty
                   ? html`<mass-ai-dj-party
