@@ -10,7 +10,6 @@ from homeassistant.components.websocket_api import async_register_command
 from homeassistant.components.websocket_api.connection import ActiveConnection
 from homeassistant.components.websocket_api.decorators import async_response, websocket_command
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
 from ..model import PartyUpdate, VibeSession
@@ -55,31 +54,40 @@ async def ws_get_parties(
 async def websocket_get_players(
     hass: HomeAssistant, connection: ActiveConnection, raw_msg: dict[str, vol.Any]
 ) -> None:
-    """Returns ONLY players created by the Music Assistant integration."""
+    """Returns ONLY players from Music Assistant."""
         
     msg  = cast(dto.GetPlayersMsg, raw_msg)
     try:
         players : list[dict[str, str]]= []
-        states = hass.states.async_all("media_player")
-        registry = er.async_get(hass)
+        mass_data = hass.data.get("music_assistant")
         
-        for state in states:
-            entity_id = state.entity_id
-            entry = registry.async_get(entity_id)
+        if not mass_data:
+            connection.send_error(int(msg["id"]), "get_players_failed", "Music Assistant integration not loaded")
+            return
             
-            if entry and entry.platform == "music_assistant":
-                attrs = dict(state.attributes) #type: ignore
-                friendly_name = attrs.get("friendly_name", entity_id)
-                
-                players.append({
-                    "entity_id": entity_id,
-                    "name": friendly_name
-                })
+        if isinstance(mass_data, dict):
+            mass_client = next(iter(mass_data.values()), None) //#type: ignore
+            if mass_client is not None and hasattr(mass_client, "client"): //#type: ignore
+                mass_client = mass_client.client //#type: ignore
+        else:
+            mass_client = mass_data
+            
+        if not mass_client:
+            connection.send_error(int(msg["id"]), "get_players_failed", "Music Assistant client not found")
+            return
+            
+        # Request all players directly from the MA server
+        ma_players = await mass_client.connection.send_command("players/all") //#type: ignore
+        
+        for player in ma_players: //#type: ignore
+            players.append({ //#type: ignore
+                "entity_id": player.get("player_id"),
+                "name": player.get("name", "Unknown Player")
+            })
                 
         connection.send_result(int(msg["id"]), players)
     except Exception as err:
         connection.send_error(int(msg["id"]), "get_players_failed", str(err))
-        
 
 @websocket_command(api_schema.CREATE_PARTY_SCHEMA)
 @async_response
